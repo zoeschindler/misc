@@ -140,9 +140,8 @@ function qsm_export( ...
         % export input variables
         input_values = struct2cell(QSM.rundata.inputs);
         input_names = fieldnames(QSM.rundata.inputs);
-        writetable(cell2table(input_values, ...
-            'RowNames',input_names, ...
-            'VariableNames',{'Value'}),str, ...
+         writetable(table(input_names,input_values, ...
+            'VariableNames',{'Parameter','Value'}),str, ...
             'WriteRowNames',true, ...
             'Sheet','input_parameters');
         
@@ -303,3 +302,28 @@ function qsm_export( ...
     end
 
 end
+
+%% EXAMPLES
+
+% % using treeqsm output
+% % load point cloud
+% myTree = 'C:\Daten\Arbeit\Test_TreeQSM\tree.txt';
+% P = readtable(myTree); P = table2array(P(:,1:3));
+% % compute QSM
+% treeqsm(P, inputs)
+% % export QSM
+% qsm_export("results\QSM_dummy_t1_m1.mat")
+
+% % using select_optimum output
+% % load point cloud
+% myTree = 'C:\Daten\Arbeit\Test_TreeQSM\tree';
+% % compute QSMs
+% TreeQSMs = make_models_parallel(myTree, 'multiple_trees', 5, inputs);
+% % select best QSM
+% select_optimum(TreeQSMs, 'all_mean_dis', 'dummy');
+% % save QSM in seperate file
+% load("results\OptimalQSMs_dummy.mat",'OptQSM')
+% QSM = OptQSM;
+% save("results\OptimalQSMs_dummy_best.mat",'QSM')
+% % export QSM
+% qsm_export("results\OptimalQSMs_dummy_best.mat")
