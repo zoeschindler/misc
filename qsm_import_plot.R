@@ -8,6 +8,7 @@
 library(R.matlab)
 library(rgl)
 library(viridis)
+library(lidR)
 
 # set path
 mat_path <- "C:/Daten/Arbeit/Test_TreeQSM/test_qsm.mat"
@@ -219,6 +220,7 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
   }
   
   # plot the cylinders
+  # mit apply eventuell schneller
   open3d()
   par3d(windowRect = c(50,50,window[1]+50,window[2]+50))
   bg3d(bg_color)
@@ -239,7 +241,7 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
 # PLOTTING QSMS - EXECUTION
 ################################################################################
 
-plot_qsm(qsm, col_var="branch")
+plot_qsm(qsm, col_var="BranchOrder")
 # or: plot_qsm(qsm$cylinder)
 
 ################################################################################
@@ -264,7 +266,7 @@ plot_qsm(qsm, col_var="branch")
 # * select_optimum
 
 # start MATLAB server
-Matlab$startServer(port = 9999)
+Matlab$startServer(port=9999)
 matlab <- Matlab()
 isOpen <- open(matlab)
 
@@ -290,9 +292,10 @@ evaluate(matlab, "set(0,'DefaultFigureVisible','off')")
 # load point cloud file in R
 pts <- read.table(path_points)[,1:3]
 colnames(pts) <- c("X", "Y", "Z")
+pts <- as.matrix(pts)
 
 # set a variable in R and send to MATLB
-setVariable(matlab, pts = as.matrix(pts))
+setVariable(matlab, pts = pts)
 evaluate(matlab,"pts(1:5,:)")
 
 # get default input values
@@ -303,7 +306,7 @@ inputs <- inputs$inputs[,,1]
 # change input values
 inputs$name = "dummy"
 inputs$Tria = 0
-inputs$PatchDiam1 = 0.15
+inputs$PatchDiam1 = c(0.1,0.15)
 inputs$PatchDiam2Min = 0.02
 inputs$PatchDiam2Max = 0.06
 inputs$BallRad1 = inputs$BallRad1 + 0.02
@@ -311,6 +314,11 @@ inputs$BallRad2 = inputs$PatchDiam2Max + 0.01
 inputs$nmin1 = 5
 inputs$savemat = 1
 inputs$savetxt = 1
+
+# convert back to matrices inside list
+for (name in names(inputs)) {
+  inputs[[name]] <- matrix(inputs[[name]], nrow = 1)
+}
 
 # return input values to matlab
 setVariable(matlab, inputs = inputs)
