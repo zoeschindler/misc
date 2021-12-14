@@ -46,7 +46,6 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
   # rename columns
   if (!is.null(col) & length(col) == ncol(new_df)) {
     colnames(new_df) <- col
-    print("columns were successfully renamed")
   }
   
   # show head of the dataframe
@@ -58,10 +57,17 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
 
 ################################################################################
 
-read_qsm <- function(mat_path, qsm_var) {
+read_qsm <- function(data_in, qsm_var) {
   
   # read in data
-  data_mat <- readMat(mat_path)
+  if (is(data_in, "character")) {
+    data_mat <- readMat(data_in)  # read matlab file from path
+  } else if (is(data_in, "list")) {
+    data_mat <- data_in  # already read matlab file
+  } else {
+    warning("input must be a path (character) or a qsm (list)")
+    stop()
+  }
   data_mat <- data_mat[[qsm_var]][,,1]
   
   #####
@@ -235,5 +241,90 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
 
 plot_qsm(qsm, col_var="branch")
 # or: plot_qsm(qsm$cylinder)
+
+################################################################################
+# EXECUTE TREEQSM
+################################################################################
+
+# resources
+# https://mandymejia.com/2014/08/18/three-ways-to-use-matlab-from-r/
+# https://www.r-bloggers.com/2015/04/matlabr-a-package-to-calling-matlab-from-r-with-system/
+
+# reading in data from 
+# * las files
+# * laz files
+# * txt files
+# ( in R or in matlab )
+
+# setting parameters
+
+# running main functions
+# * treeqsm
+# * make_models_parallel
+# * select_optimum
+
+# start MATLAB server
+Matlab$startServer(port = 9999)
+matlab <- Matlab()
+isOpen <- open(matlab)
+
+# note that the code will not halt and wait for MATLAB to get started
+if (!isOpen) R.oo::throw("MATLAB server is not running: waited 30 seconds.")
+
+################################################################################
+
+# set paths
+path_points <- 'C:/Daten/Arbeit/Test_TreeQSM/tree.txt'
+path_wd     <- 'C:/Daten/Arbeit/Test_TreeQSM'
+
+# create output path
+dir.create(file.path(path_wd, 'results'), showWarnings = FALSE)
+
+# set matlab working directory
+evaluate(matlab, paste0("cd ", path_wd, ";"))
+evaluate(matlab, "pwd")
+
+# turn off plots
+evaluate(matlab, "set(0,'DefaultFigureVisible','off')")
+
+# load point cloud file in R
+pts <- read.table(path_points)[,1:3]
+colnames(pts) <- c("X", "Y", "Z")
+
+# set a variable in R and send to MATLB
+setVariable(matlab, pts = as.matrix(pts))
+evaluate(matlab,"pts(1:5,:)")
+
+# get default input values
+evaluate(matlab,"clear inputs; create_input;")
+inputs <- getVariable(matlab, "inputs")
+inputs <- inputs$inputs[,,1]
+
+# change input values
+inputs$name = "dummy"
+inputs$Tria = 0
+inputs$PatchDiam1 = 0.15
+inputs$PatchDiam2Min = 0.02
+inputs$PatchDiam2Max = 0.06
+inputs$BallRad1 = inputs$BallRad1 + 0.02
+inputs$BallRad2 = inputs$PatchDiam2Max + 0.01
+inputs$nmin1 = 5
+inputs$savemat = 1
+inputs$savetxt = 1
+
+# return input values to matlab
+setVariable(matlab, inputs = inputs)
+
+# run treeqsm
+evaluate(matlab, "myTree = treeqsm(pts, inputs);")
+
+# pass QSM from MATLAB to R
+qsm_raw <- getVariable(matlab, "myTree")
+qsM_df <- read_qsm(qsm_raw, "myTree")
+
+################################################################################
+
+# close the MATLAB server
+close(matlab)
 
 ################################################################################
