@@ -10,11 +10,17 @@ library(rgl)
 library(viridis)
 library(lidR)
 
-# set path
-mat_path <- "C:/Daten/Arbeit/Test_TreeQSM/test_qsm.mat"
+# execute?
+execute <- TRUE
+
+# CONTENT
+# - READ TREEQSM MAT-FILE
+# - PLOTTING QSM
+# - CALCULATE QSM VIA MATLAB SERVER
+# - EXAMPLE EXECUTION
 
 ################################################################################
-# READ TREEQSM MAT-FILE - FUNCTIONS
+# READ TREEQSM MAT-FILE
 ################################################################################
 
 get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
@@ -58,7 +64,7 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
 
 ################################################################################
 
-read_qsm <- function(data_in, qsm_var) {
+read_qsm <- function(data_in, qsm_var="QSM") {
   
   # read in data
   if (is(data_in, "character")) {
@@ -174,13 +180,7 @@ read_qsm <- function(data_in, qsm_var) {
 }
 
 ################################################################################
-# READ TREEQSM MAT-FILE - EXECUTION
-################################################################################
-
-qsm <- read_qsm(mat_path, "QSM")
-
-################################################################################
-# PLOTTING QSMS - FUNCTIONS
+# PLOTTING QSM
 ################################################################################
 
 plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FALSE,
@@ -238,101 +238,152 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
 }
 
 ################################################################################
-# PLOTTING QSMS - EXECUTION
+# CALCULATE QSM VIA MATLAB SERVER
 ################################################################################
 
-plot_qsm(qsm, col_var="BranchOrder")
-# or: plot_qsm(qsm$cylinder)
-
-################################################################################
-# EXECUTE TREEQSM
-################################################################################
-
-# resources
-# https://mandymejia.com/2014/08/18/three-ways-to-use-matlab-from-r/
-# https://www.r-bloggers.com/2015/04/matlabr-a-package-to-calling-matlab-from-r-with-system/
-
-# reading in data from 
-# * las files
-# * laz files
-# * txt files
-# ( in R or in matlab )
-
-# setting parameters
-
-# running main functions
-# * treeqsm
-# * make_models_parallel
-# * select_optimum
-
-# start MATLAB server
-Matlab$startServer(port=9999)
-matlab <- Matlab()
-isOpen <- open(matlab)
-
-# note that the code will not halt and wait for MATLAB to get started
-if (!isOpen) R.oo::throw("MATLAB server is not running: waited 30 seconds.")
-
-################################################################################
-
-# set paths
-path_points <- 'C:/Daten/Arbeit/Test_TreeQSM/tree.txt'
-path_wd     <- 'C:/Daten/Arbeit/Test_TreeQSM'
-
-# create output path
-dir.create(file.path(path_wd, 'results'), showWarnings = FALSE)
-
-# set matlab working directory
-evaluate(matlab, paste0("cd ", path_wd, ";"))
-evaluate(matlab, "pwd")
-
-# turn off plots
-evaluate(matlab, "set(0,'DefaultFigureVisible','off')")
-
-# load point cloud file in R
-pts <- read.table(path_points)[,1:3]
-colnames(pts) <- c("X", "Y", "Z")
-pts <- as.matrix(pts)
-
-# set a variable in R and send to MATLB
-setVariable(matlab, pts = pts)
-evaluate(matlab,"pts(1:5,:)")
-
-# get default input values
-evaluate(matlab,"clear inputs; create_input;")
-inputs <- getVariable(matlab, "inputs")
-inputs <- inputs$inputs[,,1]
-
-# change input values
-inputs$name = "dummy"
-inputs$Tria = 0
-inputs$PatchDiam1 = c(0.1,0.15)
-inputs$PatchDiam2Min = 0.02
-inputs$PatchDiam2Max = 0.06
-inputs$BallRad1 = inputs$BallRad1 + 0.02
-inputs$BallRad2 = inputs$PatchDiam2Max + 0.01
-inputs$nmin1 = 5
-inputs$savemat = 1
-inputs$savetxt = 1
-
-# convert back to matrices inside list
-for (name in names(inputs)) {
-  inputs[[name]] <- matrix(inputs[[name]], nrow = 1)
+# start Matlab server
+start_mat_server <- function(host="localhost", port=9999) {
+  # resources
+  # https://mandymejia.com/2014/08/18/three-ways-to-use-matlab-from-r/
+  # https://www.r-bloggers.com/2015/04/matlabr-a-package-to-calling-matlab-from-r-with-system/
+  Matlab$startServer(port=port)
+  server <- Matlab(host=host, port=port)
+  isOpen <- open(server)
+  if (!isOpen) R.oo::throw("MATLAB server is not running: waited 30 seconds.")
+  return(server)
 }
 
-# return input values to matlab
-setVariable(matlab, inputs = inputs)
+################################################################################
 
-# run treeqsm
-evaluate(matlab, "myTree = treeqsm(pts, inputs);")
-
-# pass QSM from MATLAB to R
-qsm_raw <- getVariable(matlab, "myTree")
-qsM_df <- read_qsm(qsm_raw, "myTree")
+# close Matlab server
+stop_mat_server <- function(server) {
+  close(server)
+}
 
 ################################################################################
 
-# close the MATLAB server
-close(matlab)
+# read point cloud + convert coordinates to matrix
+qsm_points <- function(path_points) {
+  
+  # get file extension
+  file_split <- strsplit(path_points, split="[.]")[[1]]
+  file_exten <- file_split[length(file_split)]
+  
+  # load data differently depending on file extension
+  if (file_exten == "txt") {
+    pts <- read.table(path_points)[,1:3]
+    colnames(pts) <- c("X", "Y", "Z")
+  } else if (file_exten %in% c("las","laz")) {
+    pts <- readLAS(path_points)
+    pts <- pts@data[,c("X","Y","Z")]
+  } else {
+    warning("read the coordinates manually and save them as matrix")
+  }
+  
+  # return point cloud as matrix
+  return(as.matrix(pts))
+}
+
+################################################################################
+
+# get input values from Matlab server + change them
+qsm_inputs <- function(server, changes) {
+  
+  # get default input values
+  evaluate(server,"clear inputs; create_input;")
+  inputs <- getVariable(server, "inputs")
+  inputs <- inputs$inputs[,,1]
+  
+  # change input values
+  for (name in names(changes)) {
+    if (name %in% names(inputs)) {
+      inputs[[name]] <- changes[[name]]
+    }
+  }
+  
+  # convert back to matrices inside list
+  for (name in names(inputs)) {
+    inputs[[name]] <- matrix(inputs[[name]], nrow = 1)
+  }
+  
+  # return mutated input values
+  return(inputs)
+}
+
+################################################################################
+
+# calculate QSM on Matlab server
+qsm_calculation <- function(server, points, inputs, path_wd) {
+  
+  # create output path
+  dir.create(file.path(path_wd, 'results'), showWarnings = FALSE)
+  
+  # set matlab working directory
+  evaluate(server, paste0("cd ", path_wd, ";"))
+  evaluate(server, "pwd")
+  
+  # turn off plots
+  # does not always work though
+  evaluate(server, "set(0,'DefaultFigureVisible','off');")
+  evaluate(server, "figure('visible','off');")
+  
+  # set a variable in R and send to MATLB
+  setVariable(server, points = points)
+  evaluate(server,"points(1:5,:)")  # just to confirm the data is read in correctly
+  
+  # return input values to matlab
+  setVariable(server, inputs = inputs)
+  
+  # run treeqsm
+  evaluate(server, "QSM = treeqsm(points, inputs);")
+  
+  # pass QSM from MATLAB to R
+  qsm <- getVariable(server, "QSM")
+  qsm <- read_qsm(qsm, "QSM")
+  
+  # return "raw" qsm
+  return(qsm)
+}
+
+################################################################################
+# EXAMPLE EXECUTION
+################################################################################
+
+# set path
+wd_path <- "C:/Daten/Arbeit/Test_TreeQSM"
+
+# excute?
+if (execute) {
+  
+  # start server
+  mat_server <- start_mat_server()
+  
+  # read points
+  point_matrix <- qsm_points(paste0(wd_path, "/tree.txt"))
+  
+  # set inputs
+  input_list <- qsm_inputs(mat_server, list(name = "banane",
+                                            Tria = 0,
+                                            PatchDiam1 = 0.1,
+                                            PatchDiam2Min = 0.02,
+                                            PatchDiam2Max = 0.06,
+                                            BallRad1 = 0.1 + 0.02,
+                                            BallRad2 = 0.06 + 0.01,
+                                            nmin1 = 5,
+                                            savemat = 1,
+                                            savetxt = 1))
+  
+  # calculate QSM
+  qsm <- qsm_calculation(mat_server, point_matrix, input_list, wd_path)
+  
+  # close server
+  close(mat_server)
+  
+  # read QSM from file
+  qsm <- read_qsm(paste0(wd_path, "/results/QSM_banane_t1_m1.mat"), "QSM")
+  
+  # plot QSM
+  plot_qsm(qsm)
+}
 
 ################################################################################
