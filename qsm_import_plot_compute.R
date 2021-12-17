@@ -7,11 +7,12 @@
 # load packages
 library(R.matlab)
 library(rgl)
-library(viridis)
+library(viridisLite)
 library(lidR)
 
 # execute?
-execute <- TRUE
+execute_example_1 <- FALSE
+execute_example_2 <- TRUE
 
 # CONTENT
 # - READ TREEQSM MAT-FILE
@@ -23,12 +24,17 @@ execute <- TRUE
 # READ TREEQSM MAT-FILE
 ################################################################################
 
+# loops through list entries matching a pattern
+# assumes that all selected list entries are scalars of the same length
+# transforms each list entry to a data frame column
 get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
-  # loop through list entries matching the pattern
-  # assumes that all selected list entries are scalars of the same length
-  # transforms each list entry to a data frame column
-  # dim is only used if the first list entry has multiple dimensions
-  # dim = 1 if the data is stored as one variable per column
+  # target_list: list to be converted into a data frame
+  # pattern:     pattern of the list entry names to be considered
+  # dim:         only used if first entry of list has multiple dimensions,
+  #              dim = 1 -> stored as one variable per column
+  #              dim = 2 -> stored as one variable per row
+  # col:         column names to override the existing names
+  # preview:     print the first rows of the data frame?
   
   # get list names
   list_names <- names(target_list)
@@ -43,7 +49,7 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
   }
   new_df <- data.frame(matrix(NA, nrow=list_nrow, ncol=0))
   
-  # add data column-wise to the data frame
+  # add data column-wise to data frame
   for (list_name in list_names) {
     current_var <- data.frame(matrix(target_list[[list_name]], nrow=list_nrow)) # get data
     colnames(current_var) <- list_name
@@ -55,7 +61,7 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
     colnames(new_df) <- col
   }
   
-  # show head of the dataframe
+  # show head of data frame
   if (preview) print(head(new_df))
   
   # return data frame
@@ -64,7 +70,10 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
 
 ################################################################################
 
+# converts data from a matlab qsm to a list of dataframes
 read_qsm <- function(data_in, qsm_var="QSM") {
+  # data_in: path to a matlab file containing the qsm or the read in matlab file
+  # qsm_var: name of the qsm in the matlab file
   
   # read in data
   if (is(data_in, "character")) {
@@ -77,12 +86,8 @@ read_qsm <- function(data_in, qsm_var="QSM") {
   }
   data_mat <- data_mat[[qsm_var]][,,1]
   
-  #####
-  
   # extract input parameters
   input_parameters <- get_as_df((data_mat$rundata[,,1])$inputs[,,1])
-  
-  #####
   
   # prepare cylinder data
   cylinder_names_old <- names(data_mat$cylinder[,,1])
@@ -97,12 +102,8 @@ read_qsm <- function(data_in, qsm_var="QSM") {
   # extract cylinder data
   cylinder <- get_as_df(data_mat$cylinder[,,1], dim=1, col=cylinder_names_new)
   
-  #####
-  
   # extract branch data
   branch <- get_as_df(data_mat$branch[,,1])
-  
-  #####
   
   # prepare treedata
   tree_mat <- data_mat$treedata[,,1]
@@ -111,16 +112,16 @@ read_qsm <- function(data_in, qsm_var="QSM") {
   tree_overview_mat <- tree_mat[1:(idx_loc-1)]
   tree_other_mat <- tree_mat[(idx_loc):length(tree_names)]
   
-  # treedata - overview
+  # extract treedata - overview
   treedata_overview <- get_as_df(tree_overview_mat)
   
-  # treedata - location
+  #  extract treedata - location
   location <- data.frame(
     "X" = tree_mat[[idx_loc]][1,1],
     "Y" = tree_mat[[idx_loc]][1,2],
     "Z" = tree_mat[[idx_loc]][1,3])
   
-  # treedata - StemTaper
+  # extract treedata - StemTaper
   stemtaper <- get_as_df(tree_other_mat, "StemTaper",
                          dim=2, col=c("distance_m","diameter_m"))
   stem_cylinders_xyz <- cylinder[
@@ -128,23 +129,21 @@ read_qsm <- function(data_in, qsm_var="QSM") {
     c("start_X", "start_Y","start_Z","axis_X","axis_Y","axis_Z")]  # get coordinates
   stemtaper <- cbind(stemtaper, rbind(stem_cylinders_xyz, 0)) # add to stemtaper data frame
   
-  # treedata - BranchOrder
+  # extract treedata - BranchOrder
   branchorder <- get_as_df(tree_other_mat, "BranchOrd")
   branchorder <- cbind(data.frame("BranchOrder" = 1:nrow(branchorder)), branchorder)
   
-  # treedata - classes - all
+  # extract treedata - classes - all
   cylinder_dia <- get_as_df(tree_other_mat, "CylDia")  # diameter classes, 1cm
   cylinder_hei <- get_as_df(tree_other_mat, "CylHei")  # height classes, 1m
   cylinder_zen <- get_as_df(tree_other_mat, "CylZen")  # zenith classes, 10°
   cylinder_azi <- get_as_df(tree_other_mat, "CylAzi")  # azimuth classes, 10°
   
-  # treedata - classes - branches
+  # extract treedata - classes - branches
   branch_dia <- get_as_df(tree_other_mat, "BranchDia")  # diameter classes, 1cm
   branch_hei <- get_as_df(tree_other_mat, "BranchHei")  # height classes, 1m
   branch_zen <- get_as_df(tree_other_mat, "BranchZen")  # zenith classes, 10°
   branch_azi <- get_as_df(tree_other_mat, "BranchAzi")  # azimuth classes, 10°
-  
-  #####
   
   # prepare pmdistance data
   pmdist_mat <- data_mat$pmdistance[,,1]
@@ -155,8 +154,6 @@ read_qsm <- function(data_in, qsm_var="QSM") {
   
   # extract pmdistamce - distances
   pmdist_distance <- data.frame("CylDist" = pmdist_mat[["CylDist"]])
-  
-  #####
   
   # return results
   return(list(
@@ -183,15 +180,15 @@ read_qsm <- function(data_in, qsm_var="QSM") {
 # PLOTTING QSM
 ################################################################################
 
+# plots QSM cylinders in an rgl device
 plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FALSE,
          bg_color="grey20", ax_color="white", window=c(500,700)) {
-  # plots QSM cylinders in an rgl device
-  # col_var:      which variable to use for coloring (branch / BranchOrder)
-  # palette:      color palette to use (viridis, turbo, magma, ...)
-  # light scene:  should the scene be lit
-  # bg_color:     background color
-  # ax_color:     axes color
-  # window:       initial window size
+  # col_var:     which variable to use for coloring (branch / BranchOrder)
+  # palette:     color palette to use (viridis, turbo, magma, ...)
+  # light scene: should the scene be lit
+  # bg_color:    background color
+  # ax_color:    axes color
+  # window:      initial window size
   
   # extract cylinders
   if (is(data, "list")) {
@@ -220,7 +217,7 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
   }
   
   # plot the cylinders
-  # mit apply eventuell schneller
+  # (using apply might improve performance)
   open3d()
   par3d(windowRect = c(50,50,window[1]+50,window[2]+50))
   bg3d(bg_color)
@@ -241,9 +238,9 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
 # CALCULATE QSM VIA MATLAB SERVER
 ################################################################################
 
-# start Matlab server
+# start a Matlab server
 start_mat_server <- function(host="localhost", port=9999) {
-  # resources
+  # resources on Matlab + R
   # https://mandymejia.com/2014/08/18/three-ways-to-use-matlab-from-r/
   # https://www.r-bloggers.com/2015/04/matlabr-a-package-to-calling-matlab-from-r-with-system/
   Matlab$startServer(port=port)
@@ -255,7 +252,7 @@ start_mat_server <- function(host="localhost", port=9999) {
 
 ################################################################################
 
-# close Matlab server
+# close a Matlab server
 stop_mat_server <- function(server) {
   close(server)
 }
@@ -264,6 +261,7 @@ stop_mat_server <- function(server) {
 
 # read point cloud + convert coordinates to matrix
 qsm_points <- function(path_points) {
+  # path_points: path to a point cloud saved as las / laz / txt
   
   # get file extension
   file_split <- strsplit(path_points, split="[.]")[[1]]
@@ -278,9 +276,10 @@ qsm_points <- function(path_points) {
     pts <- pts@data[,c("X","Y","Z")]
   } else {
     warning("read the coordinates manually and save them as matrix")
+    stop()
   }
   
-  # return point cloud as matrix
+  # return point cloud as matrix with XYZ columns
   return(as.matrix(pts))
 }
 
@@ -288,6 +287,8 @@ qsm_points <- function(path_points) {
 
 # get input values from Matlab server + change them
 qsm_inputs <- function(server, changes) {
+  # server:  running matlab server
+  # changes: list containing the to be changed input parameters
   
   # get default input values
   evaluate(server,"clear inputs; create_input;")
@@ -313,7 +314,11 @@ qsm_inputs <- function(server, changes) {
 ################################################################################
 
 # calculate QSM on Matlab server
-qsm_calculation <- function(server, points, inputs, path_wd) {
+qsm_treeqsm <- function(server, points, inputs, path_wd) {
+  # server:  running matlab server
+  # points:  matrix containing the point cloud in XYZ columns
+  # inputs:  input parameter list (result of qsm_inputs)
+  # path_wd: path where the necessary "results" folder will be created
   
   # create output path
   dir.create(file.path(path_wd, 'results'), showWarnings = FALSE)
@@ -327,11 +332,11 @@ qsm_calculation <- function(server, points, inputs, path_wd) {
   evaluate(server, "set(0,'DefaultFigureVisible','off');")
   evaluate(server, "figure('visible','off');")
   
-  # set a variable in R and send to MATLB
+  # set points in Matlab
   setVariable(server, points = points)
   evaluate(server,"points(1:5,:)")  # just to confirm the data is read in correctly
   
-  # return input values to matlab
+  # hand over input values to matlab
   setVariable(server, inputs = inputs)
   
   # run treeqsm
@@ -341,19 +346,198 @@ qsm_calculation <- function(server, points, inputs, path_wd) {
   qsm <- getVariable(server, "QSM")
   qsm <- read_qsm(qsm, "QSM")
   
-  # return "raw" qsm
+  # return qsm
   return(qsm)
 }
 
 ################################################################################
-# EXAMPLE EXECUTION
+
+# saving point cloud as mat file
+# if the variable(s) should have specified names, use a list
+qsm_points_to_mat <- function(server, point_matrix, path_mat) {
+  # server:       running matlab server
+  # point_matrix: points in a matrix with XYZ columns
+  # path_mat:     path to the target matlab file, without extension
+  
+  # hand over variables to matlab
+  setVariable(server, path_mat = path_mat)
+  setVariable(server, point_matrix = point_matrix)
+  
+  # save point cloud in mat-file
+  if (is(point_matrix, "list")) {
+    # if point_matrix is a list of matrices
+    evaluate(server, "point_matrix")
+    evaluate(server, "save(path_mat, '-struct', 'point_matrix')")
+  } else if (is(point_matrix, "matrix")) {
+    # if point_matrix is a single matrix
+    evaluate(server, "point_matrix(1:5,:)")  # just to confirm the data is read in correctly
+    evaluate(server, "save(path_mat, 'point_matrix')")
+  } else {
+    warning("point_matrix must be a list of matrices or a single matrix")
+    stop()
+  }
+}
+
+################################################################################
+
+# make_models_parallel / make_models
+qsm_make_models <- function(server, path_wd, path_mat, inputs, qsm_name, qsm_num, parallel = T) {
+  # server:   running matlab server
+  # path_wd:  path where the necessary "results" folder will be created
+  # path_mat: path to the target matlab file (result of qsm_points_to_mat)
+  # inputs:   input parameter list (result of qsm_inputs)
+  # qsm_name: name for the output file
+  # qsm_num:  number of models per point cloud
+  # parallel: parallel computing on / off
+  
+  # create output path
+  dir.create(file.path(path_wd, 'results'), showWarnings = FALSE)
+  
+  # set matlab working directory
+  evaluate(server, paste0("cd ", path_wd, ";"))
+  evaluate(server, "pwd")
+  
+  # delete extension if it was 'accidentally' given
+  path_mat <- strsplit(path_mat, split="[.]")[[1]][1]
+  
+  # hand over variables to matlab
+  setVariable(server, path_mat = path_mat)
+  setVariable(server, qsm_name = qsm_name)
+  setVariable(server, qsm_num = qsm_num)
+  setVariable(server, inputs = inputs)
+  
+  # compute the models
+  if (parallel) {
+    evaluate(server, "QSMs = make_models_parallel(path_mat, qsm_name, qsm_num, inputs);")
+  } else {
+    evaluate(server, "QSMs = make_models(path_mat, qsm_name, qsm_num, inputs);")
+  }
+  
+  # pass QSMs from matlab to R
+  evaluate(server, "QSM_n = max(size(QSMs))")
+  QSM_n <- getVariable(server, "QSM_n")
+  QSM_n <- QSM_n[[1]][1,1]
+  QSMs <- list()
+  for (idx in 1:QSM_n) {
+    evaluate(server, paste0("currentQSM = QSMs(", idx, ")"))
+    current_QSM <- getVariable(server, "currentQSM")
+    QSMs[[idx]] <- read_qsm(current_QSM, "currentQSM")
+  }
+  
+  # return QSMs
+  return(QSMs)
+}
+
+################################################################################
+
+# select optimal input parameters & QSM
+qsm_select_optimum <- function(server, path_wd, path_mat, qsm_name, qsm_measure="all_mean_dis") {
+  # server:      running matlab server
+  # path_wd:     path where the necessary "results" folder will be created
+  # path_mat:    path to the target matlab file (result of qsm_make_models)
+  # qsm_name:    name for the output file
+  # qsm_measure: measure used for selection
+  
+  # create output path
+  dir.create(file.path(path_wd, "results"), showWarnings = FALSE)
+  
+  # set matlab working directory
+  evaluate(server, paste0("cd ", path_wd, ";"))
+  evaluate(server, "pwd")
+  
+  # hand over variables to matlab
+  setVariable(server, path_mat = path_mat)
+  setVariable(server, qsm_name = qsm_name)
+  setVariable(server, qsm_measure = qsm_measure)
+  
+  # load previously run models
+  # assumes qsms were saved with make_models_parallel (-> one variable stored in file)
+  evaluate(server, "QSM_data = load(path_mat)")
+  evaluate(server, "QSM_data_names = fieldnames(QSM_data)")
+  evaluate(server, "QSMs = QSM_data.(QSM_data_names{1,1})")
+  
+  # select the best models
+  evaluate(server, "[TreeData, OptModels, OptInputs, OptQSM] = select_optimum(QSMs, qsm_measure, qsm_name)")
+  
+  # pass results from matlab to R
+  TreeData  <- getVariable(server, "TreeData")
+  OptModels <- getVariable(server, "OptModels")
+  OptInputs <- getVariable(server, "OptInputs")
+  OptQSM    <- getVariable(server, "OptQSM")
+  
+  # reshape Treedata
+  # out: list with data frames with attributes
+  treedata_mat <- TreeData$TreeData[,,1]
+  treedata_num <- ifelse(is.null(ncol(treedata_mat)), 1, ncol(treedata_mat))
+  treedata_names <- unlist(ifelse(treedata_num == 1,
+                                  treedata_mat$name,
+                                  list(treedata_mat["name",1:treedata_num])))
+  # if there is only one tree, add a dummy dimension
+  if (treedata_num == 1) {
+    treedata_mat <- as.list(cbind(treedata_mat, treedata_mat))
+  }
+  treedata_list <- list()
+  # loop through columns
+  for (col_idx in 1:treedata_num) {
+    idx_loc <- which(names(treedata_mat[,col_idx]) == "location")
+    col_name <- as.character(treedata_mat["name",col_idx])
+    treedata_overview <- get_as_df(treedata_mat[1:(idx_loc-1),col_idx])
+    treedata_overview$name <- col_name
+    treedata_overview$value <- c("mean", "sd")
+    treedata_list[[col_name]] <- treedata_overview
+  }
+  
+  # reshape OptModels
+  # out: list with lists with optimal models
+  optmodels_mat <- OptModels$OptModels
+  optmodels_list <- list()
+  for (idx in 1:treedata_num) {
+    best_input <- unlist(optmodels_mat[[idx]])
+    best_QSM   <- unlist(optmodels_mat[[idx + treedata_num]])
+    optmodels_list[[treedata_names[idx]]] <- list(
+      "using_best_input" = best_input, "best_single_qsm"  = best_QSM)
+  }
+  
+  # reshape OptInputs
+  # out: list with data frames with input value 
+  optinputs_mat <- OptInputs$OptInputs
+  optinputs_values <- unlist(optinputs_mat)
+  optinputs_length <- length(optinputs_values)/treedata_num
+  optinputs_names <- unlist(dimnames(optinputs_mat))
+  optinputs_list <- list()
+  for (idx in 1:treedata_num) {
+    optinputs_idx <- optinputs_values[(1:optinputs_length)+(idx-1)*optinputs_length]
+    optinputs_idx <- data.frame(matrix(optinputs_idx, nrow = 1))
+    colnames(optinputs_idx) <- optinputs_names
+    optinputs_list[[treedata_names[idx]]] <- optinputs_idx
+  }
+  
+  # reshape OptQSMs
+  # out: list with all read in QSMs
+  optqsm_mat <- OptQSM
+  optqsm_list <- list()
+  for (idx in 1:treedata_num) {
+    evaluate(server, paste0("currentQSM = OptQSM(", idx, ")"))
+    optqsm_idx <- getVariable(server, "currentQSM")
+    optqsm_list[[treedata_names[idx]]] <- read_qsm(optqsm_idx, "currentQSM")
+  }
+  
+  # return all reshaped outputs
+  return(list(TreeData  = treedata_list,
+              OptModels = optmodels_list,
+              OptInputs = optinputs_list,
+              OptQSMs   = optqsm_list))
+}
+
+################################################################################
+# EXECUTION EXAMPLE 1
 ################################################################################
 
 # set path
-wd_path <- "C:/Daten/Arbeit/Test_TreeQSM"
+wd_path <- "D:/Test_TreeQSM"
 
-# excute?
-if (execute) {
+# execute example
+if (execute_example_1) {
   
   # start server
   mat_server <- start_mat_server()
@@ -374,16 +558,64 @@ if (execute) {
                                             savetxt = 1))
   
   # calculate QSM
-  qsm <- qsm_calculation(mat_server, point_matrix, input_list, wd_path)
+  qsm <- qsm_treeqsm(mat_server, point_matrix, input_list, wd_path)
   
   # close server
   close(mat_server)
   
   # read QSM from file
-  qsm <- read_qsm(paste0(wd_path, "/results/QSM_banane_t1_m1.mat"), "QSM")
+  qsm <- read_qsm(file.path(wd_path, "results", "QSM_banane_t1_m1.mat"), "QSM")
   
   # plot QSM
   plot_qsm(qsm)
+}
+
+################################################################################
+# EXECUTION EXAMPLE 2
+################################################################################
+
+# set path
+path_wd <- "D:/Test_TreeQSM"
+
+# execute example
+if (execute_example_2) {
+  
+  # start server
+  server <- start_mat_server()
+  
+  # read multiple point clouds
+  points_1 <- qsm_points(file.path(path_wd, "tree.txt"))
+  points_2 <- qsm_points(file.path(path_wd, "tree_2.txt"))
+  point_matrix <- list("apple" = points_1, "banana" = points_2)
+  
+  # save points in single mat file
+  path_mat <- file.path(path_wd, "tree_both.mat")
+  qsm_points_to_mat(server, point_matrix, path_mat)
+  
+  # set input parameters
+  inputs <- qsm_inputs(server, list(Tria = 0,
+                                    PatchDiam1 = c(0.10, 0.15),
+                                    PatchDiam2Min = 0.02,
+                                    PatchDiam2Max = 0.05,
+                                    nmin1 = 5,
+                                    BallRad1 = c(0.10, 0.15) + 0.02,
+                                    BallRad2 = 0.05 + 0.01))
+  
+  # calculate multiple models
+  # several models per input parameter combination + per point cloud
+  multiple_models <- qsm_make_models(server, path_wd, path_mat, inputs,
+                                     qsm_name = "multiple_models_both",
+                                     qsm_num  = 2,
+                                     parallel = TRUE)
+  
+  # choose optimal input parameter combinations + QSM per point cloud
+  path_mat <- file.path(path_wd, "results", "multiple_models_both.mat")
+  optmized_models <- qsm_select_optimum(server, path_wd, path_mat,
+                                        qsm_name = "optimization_both",
+                                        qsm_measure = "all_mean_dis")
+  
+  # stop server
+  stop_mat_server(server)
 }
 
 ################################################################################
