@@ -10,15 +10,16 @@ library(rgl)
 library(viridisLite)
 library(lidR)
 
-# execute?
+# execute example?
 execute_example_1 <- FALSE
-execute_example_2 <- TRUE
+execute_example_2 <- FALSE
 
 # CONTENT
 # - READ TREEQSM MAT-FILE
 # - PLOTTING QSM
 # - CALCULATE QSM VIA MATLAB SERVER
-# - EXAMPLE EXECUTION
+# - EXECUTION EXAMPLE 1
+# - EXECUTION EXAMPLE 2
 
 ################################################################################
 # READ TREEQSM MAT-FILE
@@ -129,6 +130,12 @@ read_qsm <- function(data_in, qsm_var="QSM") {
     c("start_X", "start_Y","start_Z","axis_X","axis_Y","axis_Z")]  # get coordinates
   stemtaper <- cbind(stemtaper, rbind(stem_cylinders_xyz, 0)) # add to stemtaper data frame
   
+  # extract treedata - spreads & VerticalProfile
+  crown_mean <- get_as_df(tree_other_mat, "VerticalProfile")
+  crown_spreads <- get_as_df(tree_other_mat, "spreads")
+  crown <- cbind(crown_mean, crown_spreads)
+  colnames(crown) <- c("mean", paste0("spread_", 1:18))
+  
   # extract treedata - BranchOrder
   branchorder <- get_as_df(tree_other_mat, "BranchOrd")
   branchorder <- cbind(data.frame("BranchOrder" = 1:nrow(branchorder)), branchorder)
@@ -163,6 +170,7 @@ read_qsm <- function(data_in, qsm_var="QSM") {
     "treedata_overview" = treedata_overview,
     "location" = location,
     "stemtaper" = stemtaper,
+    "crown" = crown,
     "branchorder" = branchorder,
     "cylinder_dia" = cylinder_dia,
     "cylinder_hei" = cylinder_hei,
@@ -466,7 +474,7 @@ qsm_select_optimum <- function(server, path_wd, path_mat, qsm_name, qsm_measure=
   OptQSM    <- getVariable(server, "OptQSM")
   
   # reshape Treedata
-  # out: list with data frames with attributes
+  # out: list with data frames with mean attributes
   treedata_mat <- TreeData$TreeData[,,1]
   treedata_num <- ifelse(is.null(ncol(treedata_mat)), 1, ncol(treedata_mat))
   treedata_names <- unlist(ifelse(treedata_num == 1,
@@ -486,6 +494,9 @@ qsm_select_optimum <- function(server, path_wd, path_mat, qsm_name, qsm_measure=
     treedata_overview$value <- c("mean", "sd")
     treedata_list[[col_name]] <- treedata_overview
   }
+  # TODO: potentially also export remaining variables
+  #       not really useful if using several input combinations though
+  #       maybe outsource into own read_treedata() function (line 108 - 146)
   
   # reshape OptModels
   # out: list with lists with optimal models
@@ -547,15 +558,16 @@ if (execute_example_1) {
   
   # set inputs
   input_list <- qsm_inputs(mat_server, list(name = "banane",
-                                            Tria = 0,
+                                            # Tria = 0,
                                             PatchDiam1 = 0.1,
                                             PatchDiam2Min = 0.02,
                                             PatchDiam2Max = 0.06,
                                             BallRad1 = 0.1 + 0.02,
                                             BallRad2 = 0.06 + 0.01,
-                                            nmin1 = 5,
+                                            # nmin1 = 5,
                                             savemat = 1,
-                                            savetxt = 1))
+                                            savetxt = 1,
+                                            plot = 0))
   
   # calculate QSM
   qsm <- qsm_treeqsm(mat_server, point_matrix, input_list, wd_path)
@@ -597,9 +609,10 @@ if (execute_example_2) {
                                     PatchDiam1 = c(0.10, 0.15),
                                     PatchDiam2Min = 0.02,
                                     PatchDiam2Max = 0.05,
-                                    nmin1 = 5,
+                                    # nmin1 = 5,
                                     BallRad1 = c(0.10, 0.15) + 0.02,
-                                    BallRad2 = 0.05 + 0.01))
+                                    BallRad2 = 0.05 + 0.01,
+                                    plot = 0))
   
   # calculate multiple models
   # several models per input parameter combination + per point cloud

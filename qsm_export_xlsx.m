@@ -1,4 +1,4 @@
-function qsm_export( ...
+function qsm_export_xlsx( ...
     input_path, ... % path to the QSM *.mat-files, necessary
     output_path, ... % path to the result folder, optional
     savename, ... % name of the file, optional
@@ -196,7 +196,13 @@ function qsm_export( ...
             'start_X','start_Y','start_Z','axis_X','axis_Y','axis_Z'});
         writetable(stem_taper_table, str, ...
             'Sheet','treedata_StemTaper');
-        
+
+        % export treedata - crown
+        %  treedata.VerticalProfile + treedata.spreads
+        crown_table = array2table([QSM.treedata.VerticalProfile, QSM.treedata.spreads], ...
+            'VariableNames',["mean", "spread_" + string([1:18])])
+        writetable(crown_table,str, ...
+            'Sheet','treedata_crown');
         % only if cylinder classes should be saved
         if xlsx_cylinder
     
