@@ -239,6 +239,7 @@ plot_qsm <- function(data, col_var="BranchOrder", palette_fun=turbo,
     cyl
   })
   open3d()
+  par3d(windowRect = c(50,50,window[1]+50,window[2]+50))
   bg3d(bg_color)
   shade3d(shapelist3d(cylinder_list, plot = FALSE), lit=light_scene)
   # slighty slower version:
