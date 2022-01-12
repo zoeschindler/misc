@@ -189,13 +189,14 @@ read_qsm <- function(data_in, qsm_var="QSM") {
 ################################################################################
 
 # plots QSM cylinders in an rgl device
-plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FALSE,
-         bg_color="grey20", ax_color="white", window=c(500,700)) {
+plot_qsm <- function(data, col_var="BranchOrder", palette_fun=turbo,
+                     palette_begin=0, palette_end=1, light_scene=FALSE,
+                     bg_color="grey20", window=c(500,700)) {
   # col_var:     which variable to use for coloring (branch / BranchOrder)
-  # palette:     color palette to use (viridis, turbo, magma, ...)
+  # palette_fun: color palette to use (viridis, turbo, magma, ...)
+  #              https://cran.r-project.org/web/packages/viridisLite/viridisLite.pdf
   # light scene: should the scene be lit
   # bg_color:    background color
-  # ax_color:    axes color
   # window:      initial window size
   
   # extract cylinders
@@ -216,7 +217,7 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
   # create color ramp
   cyl_vals <- unique(cylinder[,col_var])
   col_n <- length(cyl_vals)
-  col_vec <- palette(col_n)
+  col_vec <- palette_fun(col_n, begin = palette_begin, end = palette_end)
   
   # assign the colors to the cylinders
   cylinder$color <- NA
@@ -225,21 +226,36 @@ plot_qsm <- function(data, col_var="BranchOrder", palette=turbo, light_scene=FAL
   }
   
   # plot the cylinders
-  # (using apply might improve performance)
-  open3d()
-  par3d(windowRect = c(50,50,window[1]+50,window[2]+50))
-  bg3d(bg_color)
-  for (i in 1:nrow(cylinder)) {
+  # https://stackoverflow.com/a/70684628/13427882
+  cylinder_list <- lapply(1:nrow(cylinder), function(i) {
     cyl <- cylinder3d(
       center = cbind(
-        c(cylinder$start_X[i], cylinder$end_X[i]), 
+        c(cylinder$start_X[i], cylinder$end_X[i]),
         c(cylinder$start_Y[i], cylinder$end_Y[i]),
         c(cylinder$start_Z[i], cylinder$end_Z[i])),
       radius = cylinder$radius[i],
       closed = -2)
-    shade3d(cyl, col=cylinder$color[i], lit=light_scene)
-  }
-  axes3d(edges = c("x", "y", "z"), col = ax_color)
+    cyl$material$color <- cylinder$color[i]
+    cyl
+  })
+  open3d()
+  bg3d(bg_color)
+  shade3d(shapelist3d(cylinder_list, plot = FALSE), lit=light_scene)
+  # slighty slower version:
+  # open3d()
+  # par3d(windowRect = c(50,50,window[1]+50,window[2]+50), skipRedraw=TRUE)
+  # bg3d(bg_color)
+  # for (i in 1:nrow(cylinder)) {
+  #   cyl <- cylinder3d(
+  #     center = cbind(
+  #       c(cylinder$start_X[i], cylinder$end_X[i]),
+  #       c(cylinder$start_Y[i], cylinder$end_Y[i]),
+  #       c(cylinder$start_Z[i], cylinder$end_Z[i])),
+  #     radius = cylinder$radius[i],
+  #     closed = -2)
+  #   shade3d(cyl, col=cylinder$color[i], lit=light_scene)
+  # }
+  # par3d(skipRedraw=FALSE)
 }
 
 ################################################################################
@@ -577,6 +593,8 @@ if (execute_example_1) {
   
   # read QSM from file
   qsm <- read_qsm(file.path(wd_path, "results", "QSM_banane_t1_m1.mat"), "QSM")
+  axes3d(edges = c("x-", "y+", "z-"), col = "black")
+  grid3d(c("x-", "y+", "z-"), col = "grey50")
   
   # plot QSM
   plot_qsm(qsm)
