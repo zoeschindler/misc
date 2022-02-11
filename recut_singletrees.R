@@ -7,6 +7,8 @@
 # recuts existing singletree point clouds from the stand point cloud
 # -> useful if stand point cloud was slightly altered (rgb / filtering / ...)
 
+# TODO: verschnellern
+
 ################################################################################
 
 # load packages
@@ -14,19 +16,23 @@ library(lidR)
 library(future)
 
 # set paths
-catalog_path <- "D:/Walnuss/2021-12-15_iso1cm5k_devref15_octree1cmavg.las"
+catalog_path <- "D:/Walnuss/2022-01-26_iso10cm5k_devref15_octree10cmavg.las"
 catalog_tile_path <- "D:/Walnuss/tiles/{ID}"
-singletree_old_path <- "D:/Walnuss/singletree"
+singletree_old_path <- "D:/Walnuss/singletree_dummy"
 singletree_new_path <- "D:/Walnuss/singletree_clean"
 
 # set variables
-voxel_res <- 0.01 # should be similar to the voxel size used for downsampling
+voxel_res <- 0.03 # should be similar to the voxel size used for downsampling
 voxel_buffer <- voxel_res/2
 cores <- 15 # number of available CPU cores
 
 # set options
-retile <- FALSE 
+retile <- FALSE
 delete_tile <- FALSE
+xyz_neighbours <- TRUE
+
+# set z offset to include voxels below & above
+z_offset <- ifelse(xyz_neighbours, voxel_res, 0)
 
 # create output folders
 dir.create(singletree_new_path, showWarnings = FALSE)
@@ -80,32 +86,62 @@ for (tree_file in singletree_old_files) {
     temp_las <- filter_poi(temp_las, Z == 1000)  # this should be an impossible criterium
     
     # create a raster for each voxel layer
-    all_z_vals <- unique(voxels$Z,2)
+    all_z_vals <- unique(voxels$Z)
     for (z_val in all_z_vals) {
       
-      # create raster
-      z_subset <- voxels[voxels$Z == z_val, ]
-      z_subset <- as.data.frame(z_subset)[, c("X", "Y", "V1")]
-      # new_raster <- rasterFromXYZ(z_subset)
-      # crs(new_raster) <- crs(las)
-      new_raster <- raster(x = extent(
-        min(z_subset$X) - voxel_buffer,
-        max(z_subset$X) + voxel_buffer,
-        min(z_subset$Y) - voxel_buffer,
-        max(z_subset$Y) + voxel_buffer),
-        crs=crs(las), resolution = voxel_res)
+      # get voxels of the selected z layers
+      # z_subset <- voxels[voxels$Z == z_val, ]
+      z_subset <- voxels[voxels$Z >= z_val-z_offset & voxels$Z <= z_val+z_offset, ]
+      z_subset <- as.data.frame(z_subset)  # [, c("X", "Y", "V1")]
       
-      # combine empty raster with data
-      data_points <- SpatialPointsDataFrame(
-        coords = z_subset[, c("X", "Y")],
-        data = data.frame("V1" = z_subset[, "V1"]),
-        proj4string = crs(las))
-      # new_raster <- rasterize(data_points, new_raster, field="V1", update=TRUE)
-      new_raster[cellFromXY(new_raster, data_points@coords)] <- data_points$V1
-
+      # create empty list for raster storage
+      raster_list <- list()
+      
+      # loop through vertical voxel layers (below, z_val, above)
+      for (z_curr in unique(z_subset$Z)) {
+        z_subset_curr <- z_subset[z_subset$Z == z_curr,]
+        
+        # create raster
+        z_raster <- raster(x = extent(
+          min(z_subset$X) - voxel_buffer,
+          max(z_subset$X) + voxel_buffer,
+          min(z_subset$Y) - voxel_buffer,
+          max(z_subset$Y) + voxel_buffer),
+          crs=crs(las), resolution = voxel_res)
+        
+        # combine empty raster with data
+        data_points <- SpatialPointsDataFrame(
+          coords = z_subset_curr[, c("X", "Y")],
+          data = data.frame("V1" = z_subset_curr[, "V1"]),
+          proj4string = crs(las))
+        z_raster[cellFromXY(z_raster, data_points@coords)] <- data_points$V1
+        
+        # replace empty cells with 0
+        z_raster <- reclassify(z_raster, cbind(NA, 0))
+        
+        # filter raster to include points nearby filled rasters
+        if (xyz_neighbours) {
+          z_raster <- raster::focal(z_raster, w = matrix(1/9, nrow = 3, ncol = 3), fun=max, pad = TRUE, padValue = 0)
+        }
+        
+        # append raster list
+        raster_list <- append(raster_list, z_raster)
+      }
+      
+      # convert raster list to raster brick
+      raster_multi_z <- stack(raster_list)
+      
+      # sum up all raster layers of raster brick
+      if (nlayers(raster_multi_z) > 1) {
+        z_raster <- calc(raster_multi_z, sum)
+      }
+      else {
+        z_raster <- raster_multi_z[[1]]
+      }
+      
       # add raster values to point cloud
       las_z <- filter_poi(las, Z > (z_val - voxel_buffer) & Z <= (z_val + voxel_buffer))
-      las_z <- merge_spatial(las_z, new_raster, "V1")
+      las_z <- merge_spatial(las_z, z_raster, "V1")
       
       # remove points outside voxels
       las_z <- filter_poi(las_z, V1 > 0)
