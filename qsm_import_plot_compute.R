@@ -4,6 +4,12 @@
 ################################################################################
 ################################################################################
 
+# install missing packages
+if (!require("R.matlab")) install.packages("R.matlab")
+if (!require("rgl")) install.packages("rgl")
+if (!require("viridisLite")) install.packages("viridisLite")
+if (!require("lidR")) install.packages("lidR")
+
 # load packages
 library(R.matlab)
 library(rgl)
