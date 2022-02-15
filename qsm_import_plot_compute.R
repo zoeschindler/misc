@@ -72,9 +72,10 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
 ################################################################################
 
 # converts data from a matlab qsm to a list of dataframes
-read_qsm <- function(data_in, qsm_var="QSM") {
+read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
   # data_in: path to a matlab file containing the qsm or the read in matlab file
   # qsm_var: name of the qsm in the matlab file
+  # qsm_idx: which QSM to take, if there are multiple
   
   # read in data
   if (is(data_in, "character")) {
@@ -85,7 +86,7 @@ read_qsm <- function(data_in, qsm_var="QSM") {
     warning("input must be a path (character) or a qsm (list)")
     stop()
   }
-  data_mat <- data_mat[[qsm_var]][,,1]
+  data_mat <- data_mat[[qsm_var]][,,qsm_idx]
   
   # extract input parameters
   input_parameters <- get_as_df((data_mat$rundata[,,1])$inputs[,,1])
@@ -192,12 +193,14 @@ read_qsm <- function(data_in, qsm_var="QSM") {
 plot_qsm <- function(data, col_var="BranchOrder", palette_fun=turbo,
                      palette_begin=0, palette_end=1, light_scene=FALSE,
                      bg_color="grey20", window=c(500,700)) {
-  # col_var:     which variable to use for coloring (branch / BranchOrder)
-  # palette_fun: color palette to use (viridis, turbo, magma, ...)
-  #              https://cran.r-project.org/web/packages/viridisLite/viridisLite.pdf
-  # light scene: should the scene be lit
-  # bg_color:    background color
-  # window:      initial window size
+  # col_var:        which variable to use for coloring (branch / BranchOrder)
+  # palette_fun:    color palette to use (viridis, turbo, magma, ...)
+  #                 https://cran.r-project.org/web/packages/viridisLite/viridisLite.pdf
+  # palette_begin:  start of the palette (0 to 1)
+  # palette_end:    end of the palette (0 to 1)
+  # light_scene:    should the scene be lit?
+  # bg_color:       background color
+  # window:         initial window size
   
   # extract cylinders
   if (is(data, "list")) {
@@ -594,11 +597,11 @@ if (execute_example_1) {
   
   # read QSM from file
   qsm <- read_qsm(file.path(wd_path, "results", "QSM_banane_t1_m1.mat"), "QSM")
-  axes3d(edges = c("x-", "y+", "z-"), col = "black")
-  grid3d(c("x-", "y+", "z-"), col = "grey50")
   
   # plot QSM
   plot_qsm(qsm)
+  axes3d(edges = c("x-", "y+", "z-"), col = "black")
+  grid3d(c("x-", "y+", "z-"), col = "grey50")
 }
 
 ################################################################################
