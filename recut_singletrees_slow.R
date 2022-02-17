@@ -1,13 +1,11 @@
 ################################################################################
 ################################################################################
-# RECUT SINGLETREE FROM POINT CLOUD
+# RECUT SINGLETREE FROM POINT CLOUD (SLOW)
 ################################################################################
 ################################################################################
 
 # recuts existing singletree point clouds from the stand point cloud
 # -> useful if stand point cloud was slightly altered (rgb / filtering / ...)
-
-# TODO: verschnellern
 
 ################################################################################
 
@@ -65,7 +63,7 @@ for (tree_file in singletree_old_files) {
   voxels <- voxel_metrics(tree, length(X), res = voxel_res, all_voxels = FALSE)
   
   # load relevant catalog tiles
-  ctg <- readTLSLAScatalog(catalog_path, chunk_size = 10, chunk_buffer = 0)
+  ctg <- readTLSLAScatalog(catalog_path, chunk_size = 10, chunk_buffer = 0.5)
   ctg <- catalog_intersect(ctg, extent(tree))
   
   # loop through catalog tiles
@@ -146,11 +144,14 @@ for (tree_file in singletree_old_files) {
       # remove points outside voxels
       las_z <- filter_poi(las_z, V1 > 0)
       temp_las <- rbind(temp_las, las_z)
+      
+      # remove buffer
+      temp_las <- filter_poi(temp_las, buffer == 0)
     }
     
     # return relevant points
     return(temp_las)
-  }, .options = list(automerge = TRUE))
+  }, .options = list(automerge = TRUE, need_buffer = TRUE))
   plan(multisession, workers = 1)
   
   # save tree las file
