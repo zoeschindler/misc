@@ -59,6 +59,9 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
   # add data column-wise to data frame
   for (list_name in list_names) {
     current_var <- data.frame(matrix(target_list[[list_name]], nrow=list_nrow)) # get data
+    if (ncol(current_var) == 0) {
+      current_var <- data.frame(matrix(NA, ncol = 1, nrow = 0))
+    }
     colnames(current_var) <- list_name
     new_df <- cbind(new_df, current_var)
   }
@@ -196,9 +199,9 @@ read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
 ################################################################################
 
 # plots QSM cylinders in an rgl device
-plot_qsm <- function(data, col_var="BranchOrder", palette_fun=turbo,
+plot_qsm <- function(data, col_var="BranchOrder", cyl_tag="ID",palette_fun=turbo,
                      palette_begin=0, palette_end=1, light_scene=FALSE,
-                     bg_color="grey20", window=c(500,700)) {
+                     bg_color="grey20", window=c(500,700), sides = 6) {
   # col_var:        which variable to use for coloring (branch / BranchOrder)
   # palette_fun:    color palette to use (viridis, turbo, magma, ...)
   #                 https://cran.r-project.org/web/packages/viridisLite/viridisLite.pdf
@@ -207,6 +210,7 @@ plot_qsm <- function(data, col_var="BranchOrder", palette_fun=turbo,
   # light_scene:    should the scene be lit?
   # bg_color:       background color
   # window:         initial window size
+  # sides: number of sides of each cylinder
   
   # extract cylinders
   if (is(data, "list")) {
@@ -243,14 +247,18 @@ plot_qsm <- function(data, col_var="BranchOrder", palette_fun=turbo,
         c(cylinder$start_Y[i], cylinder$end_Y[i]),
         c(cylinder$start_Z[i], cylinder$end_Z[i])),
       radius = cylinder$radius[i],
-      closed = -2)
+      closed = -2,
+      sides = sides)
     cyl$material$color <- cylinder$color[i]
+    cyl$material$tag <- cylinder[i, cyl_tag]
     cyl
   })
   open3d()
   par3d(windowRect = c(50,50,window[1]+50,window[2]+50))
   bg3d(bg_color)
+  # legend3d("right", legend=cyl_vals, col=col_vec, cex = 1.5, pch = 15, bg.color = bg_color)
   shade3d(shapelist3d(cylinder_list, plot = FALSE), lit=light_scene)
+  
   # slighty slower version:
   # open3d()
   # par3d(windowRect = c(50,50,window[1]+50,window[2]+50), skipRedraw=TRUE)
