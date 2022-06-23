@@ -98,7 +98,14 @@ read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
   data_mat <- data_mat[[qsm_var]][,,qsm_idx]
   
   # extract input parameters
-  input_parameters <- get_as_df((data_mat$rundata[,,1])$inputs[,,1])
+  input_pars_all <- (data_mat$rundata[,,1])$inputs[,,1]
+  if ("filter" %in% names(input_pars_all)) {
+    filter_parameters <- get_as_df(input_pars_all$filter[,,1])
+    input_parameters  <- get_as_df(input_pars_all[names(input_pars_all) != "filter"])
+  } else {
+    filter_parameters <- NA
+    input_parameters <- get_as_df(input_pars_all)
+  }
   
   # prepare cylinder data
   cylinder_names_old <- names(data_mat$cylinder[,,1])
@@ -175,6 +182,7 @@ read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
   # return results
   return(list(
     "input_parameters" = input_parameters,
+    "filter_parameters" = filter_parameters,
     "cylinder" = cylinder,
     "branch" = branch,
     "treedata_overview" = treedata_overview,
@@ -199,7 +207,7 @@ read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
 ################################################################################
 
 # plots QSM cylinders in an rgl device
-plot_qsm <- function(data, col_var="BranchOrder", cyl_tag="ID",palette_fun=turbo,
+plot_qsm <- function(data, col_var="BranchOrder", cyl_tag="ID", palette_fun=turbo,
                      palette_begin=0, palette_end=1, light_scene=FALSE,
                      bg_color="grey20", window=c(500,700), sides = 6) {
   # col_var:        which variable to use for coloring (branch / BranchOrder)
@@ -256,7 +264,6 @@ plot_qsm <- function(data, col_var="BranchOrder", cyl_tag="ID",palette_fun=turbo
   open3d()
   par3d(windowRect = c(50,50,window[1]+50,window[2]+50))
   bg3d(bg_color)
-  # legend3d("right", legend=cyl_vals, col=col_vec, cex = 1.5, pch = 15, bg.color = bg_color)
   shade3d(shapelist3d(cylinder_list, plot = FALSE), lit=light_scene)
   
   # slighty slower version:
