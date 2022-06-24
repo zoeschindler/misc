@@ -142,10 +142,10 @@ read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
   # extract treedata - StemTaper
   stemtaper <- get_as_df(tree_other_mat, "StemTaper",
                          dim=2, col=c("distance_m","diameter_m"))
-  stem_cylinders_xyz <- cylinder[
-    cylinder$BranchOrder == 0,  # get stem cylinders
-    c("start_X", "start_Y","start_Z","axis_X","axis_Y","axis_Z")]  # get coordinates
-  stemtaper <- cbind(stemtaper, rbind(stem_cylinders_xyz, 0)) # add to stemtaper data frame
+  # stem_cylinders_xyz <- cylinder[
+  #   cylinder$BranchOrder == 0,  # get stem cylinders
+  #   c("start_X", "start_Y","start_Z","axis_X","axis_Y","axis_Z")]  # get coordinates
+  # stemtaper <- cbind(stemtaper, rbind(stem_cylinders_xyz, 0)) # add to stemtaper data frame
   
   # extract treedata - spreads & VerticalProfile
   crown_mean <- get_as_df(tree_other_mat, "VerticalProfile")
