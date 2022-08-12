@@ -207,9 +207,9 @@ read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
 ################################################################################
 
 # plots QSM cylinders in an rgl device
-plot_qsm <- function(data, col_var="BranchOrder", cyl_tag="ID", palette_fun=turbo,
-                     palette_begin=0, palette_end=1, light_scene=FALSE,
-                     bg_color="grey20", window=c(500,700), sides = 6) {
+plot_qsm <- function(data, col_var="BranchOrder", col_single = NULL, cyl_tag="ID",
+                     palette_fun=turbo, palette_begin=0, palette_end=1,
+                     light_scene=FALSE, bg_color="grey20", window=c(500,700), sides = 6) {
   # col_var:        which variable to use for coloring (branch / BranchOrder)
   # palette_fun:    color palette to use (viridis, turbo, magma, ...)
   #                 https://cran.r-project.org/web/packages/viridisLite/viridisLite.pdf
@@ -239,6 +239,11 @@ plot_qsm <- function(data, col_var="BranchOrder", cyl_tag="ID", palette_fun=turb
   cyl_vals <- unique(cylinder[,col_var])
   col_n <- length(cyl_vals)
   col_vec <- palette_fun(col_n, begin = palette_begin, end = palette_end)
+  
+  # if single color should be used
+  if (!is.null(col_single)) {
+    col_vec <- rep(col_single, col_n)
+  }
   
   # assign the colors to the cylinders
   cylinder$color <- NA
