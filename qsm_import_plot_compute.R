@@ -81,9 +81,9 @@ get_as_df <- function(target_list, pattern="", dim=1, col=c(), preview=FALSE) {
 ################################################################################
 
 # converts data from a matlab qsm to a list of dataframes
-read_qsm <- function(data_in, qsm_var="QSM", qsm_idx=1) {
+read_qsm <- function(data_in, qsm_var=1, qsm_idx=1) {
   # data_in: path to a matlab file containing the qsm or the read in matlab file
-  # qsm_var: name of the qsm in the matlab file
+  # qsm_var: name of the qsm in the matlab file (if there are multiple objects)
   # qsm_idx: which QSM to take, if there are multiple
   
   # read in data
