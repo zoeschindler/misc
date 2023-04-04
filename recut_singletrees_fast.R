@@ -34,7 +34,7 @@ offset <- voxel_res * neighbours
 
 # create output folders
 dir.create(singletree_new_path, showWarnings = FALSE)
-dir.create(basename(catalog_tile_path), showWarnings = FALSE)
+dir.create(dirname(catalog_tile_path), showWarnings = FALSE)
 
 ################################################################################
 
@@ -60,7 +60,7 @@ for (tree_file in singletree_old_files) {
   tree <- readTLSLAS(tree_file)
   
   # create voxels
-  voxels <- voxel_metrics(tree, as.numeric(length(X)>0), res = voxel_res, all_voxels = FALSE)
+  voxels <- voxel_metrics(tree, as.numeric(length(X) > 0), res = voxel_res, all_voxels = FALSE)
   
   # load relevant catalog tiles
   ctg <- readTLSLAScatalog(catalog_path, chunk_size = 10, chunk_buffer = 0.5) # TODO: use buffer + remove later
@@ -98,27 +98,31 @@ for (tree_file in singletree_old_files) {
     
     # add voxel attribute to point cloud
     vox <- lidR:::group_grid_3d(las@data$X, las@data$Y, las@data$Z, c(voxel_res, voxel_res), c(0, 0, 0.5 * voxel_res))
-    las <- las %>%
-      add_lasattribute(vox[[1]], "x_vox", "x_vox") %>% 
-      add_lasattribute(vox[[2]], "y_vox", "y_vox") %>%
+    las <- las |>
+      add_lasattribute(vox[[1]], "x_vox", "x_vox") |>
+      add_lasattribute(vox[[2]], "y_vox", "y_vox") |>
       add_lasattribute(vox[[3]], "z_vox", "z_vox")
-      
+    
     # merge point cloud with voxels (only keeps points with according voxel)
     las@data <- merge(las@data, voxels,
                       by.x = c("x_vox", "y_vox", "z_vox"),
                       by.y = c("X", "Y", "Z"))
     
     # remove voxel attributes
-    las <- las %>%
-      remove_lasattribute('x_vox') %>%
-      remove_lasattribute('y_vox') %>%
+    las <- las |>
+      remove_lasattribute('x_vox') |>
+      remove_lasattribute('y_vox') |>
       remove_lasattribute('z_vox')
     
     # remove buffer
     las <- filter_poi(las, buffer == 0)
     
     # return relevant points
-    return(las)
+    if (nrow(las@data) == 0) {
+      return(NULL)
+    } else {
+      return(las)
+    }
   }, .options = list(automerge = TRUE, need_buffer = TRUE))
   plan(multisession, workers = 1)
   
