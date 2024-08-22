@@ -64,7 +64,7 @@ for (tree_file in singletree_old_files) {
   
   # load relevant catalog tiles
   ctg <- readTLSLAScatalog(catalog_path, chunk_size = 10, chunk_buffer = 0.5) # TODO: use buffer + remove later
-  ctg <- catalog_intersect(ctg, extent(tree))
+  ctg <- catalog_intersect(ctg, ext(tree))
   
   # loop through catalog tiles
   plan(multisession, workers = cores)
